@@ -116,12 +116,12 @@ ros2 launch ardupilot_sitl sitl_dds_udp.launch.py transport:=udp4 refs:=$(ros2 p
 
 ### 🌐 Final Simulation (Multi-Terminal)
 
-Terminal 1 (Launch the container with GPU support):
+Terminal 1 (Launch the container **with GPU support**):
 ```bash
 cd ~/ros2_ardupilot_SITL
 ./run.sh
 ```
-Terminal 1 (Launch the container without GPU support):
+Terminal 1 (Launch the container **without GPU support**):
 ```bash
 cd ~/ros2_ardupilot_SITL
 ./run_without_gpu.sh
