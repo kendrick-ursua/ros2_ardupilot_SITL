@@ -50,12 +50,6 @@
    docker compose exec ardupilot_ros bash
    ```
 
-   ***OR***
-1. Pull docker image:
-   ```bash
-   docker pull ghcr.io/jagadeesh-pradhani/ros2_ardupilot_iris_docker:main
-   ```
-
 ### 💻 Using Visual Studio Code DevContainer
 
 1. Install the "Remote - Containers" extension in VS Code
@@ -123,10 +117,8 @@ ros2 launch ardupilot_sitl sitl_dds_udp.launch.py transport:=udp4 refs:=$(ros2 p
 
 Terminal 1 (Launch the container with display support):
 ```bash
-docker run -it --user ros --name ardupilot_sitl --network=host --gpus all --ipc=host -v /tmp/.X11-unix:/tmp/.X11-unix:rw --env=DISPLAY -e NVIDIA_DRIVER_CAPABILITIES=all ros2_ardupilot_sitl-ardupilot_ros:latest
-cd ~/ros2_ws
-source install/setup.bash
-ros2 launch ardupilot_gz_bringup iris_runway.launch.py
+cd ~/ros2_ardupilot_SITL
+./run.sh
 ```
 
 Terminal 2 (Connect to the running container):
@@ -134,7 +126,6 @@ Terminal 2 (Connect to the running container):
 docker exec -it ardupilot_sitl /bin/bash
 mavproxy.py --console --map --aircraft test --master=:14550
 ```
-Note: Replace [container_name] with the actual container name.
 
 ## 🏗️ Building Projects
 
@@ -214,17 +205,6 @@ You can modify the `Dockerfile` to add additional dependencies or change the bui
    ```bash
    colcon build --packages-select ardupilot_gazebo
    ```
-
-
-## 🤝 Contributing
-
-Contributions are welcome! Please feel free to submit a Pull Request.
-
-1. Fork the repository
-2. Create your feature branch (`git checkout -b feature/amazing-feature`)
-3. Commit your changes (`git commit -m 'Add some amazing feature'`)
-4. Push to the branch (`git push origin feature/amazing-feature`)
-5. Open a Pull Request
 
 ## 📄 License
 
