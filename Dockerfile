@@ -34,6 +34,8 @@ RUN curl https://packages.osrfoundation.org/gazebo.gpg --output /usr/share/keyri
     && apt-get update \
     && apt-get install -y gz-harmonic
 
+ENV GZ_VERSION=harmonic
+
 
 
 ####################################################################################################
@@ -132,8 +134,9 @@ RUN cd ~/ardupilot/Tools/autotest \
 
 #ROS2 with SITL
 RUN /bin/bash -c "source /opt/ros/humble/setup.bash \
-    && cd ~/ros2_ws/ \
-    && colcon build --packages-up-to ardupilot_sitl --parallel-workers 1 || true"
+    && cd ~/ros2_ws \
+    && MAKEFLAGS='-j1' colcon build --packages-up-to ardupilot_sitl \
+        --parallel-workers 1 --executor sequential"
 
 #ROS2 with SITL in GAZEBO
 RUN cd ~/ros2_ws \
@@ -146,16 +149,17 @@ RUN cd ~/ros2_ws \
 
 #Build
 RUN /bin/bash -c "source /opt/ros/humble/setup.bash \
-    && source ~/ros2_ws/install/setup.bash 2>/dev/null || true \
+    && source ~/ros2_ws/install/setup.bash \
     && cd ~/ros2_ws \
-    && colcon build --packages-up-to ardupilot_gz_bringup --parallel-workers 1"
+    && MAKEFLAGS='-j1' colcon build --packages-up-to ardupilot_gz_bringup --parallel-workers 1 --executor sequential"
 
 
-RUN cd ~/ros2_ws/src/ \
+RUN /bin/bash -c "source /opt/ros/humble/setup.bash \
+    && cd ~/ros2_ws/src/ \
     && git clone https://github.com/ArduPilot/ardupilot_ros.git \
     && cd ~/ros2_ws/ \
     && rosdep install --from-paths src --ignore-src -r -y --skip-keys gazebo-ros-pkgs \
-    && colcon build --packages-up-to ardupilot_ros --parallel-workers 1
+    && MAKEFLAGS='-j1' colcon build --packages-up-to ardupilot_ros --parallel-workers 1 --executor sequential"
 
 # Copy local src folder to ros_ws 
 COPY ./src/ /home/ros/ros2_ws/src/

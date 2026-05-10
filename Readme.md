@@ -123,7 +123,7 @@ ros2 launch ardupilot_sitl sitl_dds_udp.launch.py transport:=udp4 refs:=$(ros2 p
 
 Terminal 1 (Launch the container with display support):
 ```bash
-docker run -it --user ros --network=host --ipc=host -v /tmp/.X11-unix:/tmp/.X11-unix:rw --env=DISPLAY ros_humble
+docker run -it --user ros --name ardupilot_sitl --network=host --gpus all --ipc=host -v /tmp/.X11-unix:/tmp/.X11-unix:rw --env=DISPLAY -e NVIDIA_DRIVER_CAPABILITIES=all ros2_ardupilot_sitl-ardupilot_ros:latest
 cd ~/ros2_ws
 source install/setup.bash
 ros2 launch ardupilot_gz_bringup iris_runway.launch.py
@@ -131,7 +131,7 @@ ros2 launch ardupilot_gz_bringup iris_runway.launch.py
 
 Terminal 2 (Connect to the running container):
 ```bash
-docker exec -it [container_name] /bin/bash
+docker exec -it ardupilot_sitl /bin/bash
 mavproxy.py --console --map --aircraft test --master=:14550
 ```
 Note: Replace [container_name] with the actual container name.
