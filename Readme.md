@@ -44,6 +44,7 @@
    docker compose build
    docker compose up -d
    ```
+Note: This might take a while. Better travel and grab a coffee at Starbs Tagaytay for the meantime!
 
 3. Connect to the container:
    ```bash
