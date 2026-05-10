@@ -115,28 +115,21 @@ ros2 launch ardupilot_sitl sitl_dds_udp.launch.py transport:=udp4 refs:=$(ros2 p
 
 ### 🌐 Final Simulation (Multi-Terminal)
 
-Terminal 1 (Launch the container with display support):
+Terminal 1 (Launch the container with GPU support):
 ```bash
 cd ~/ros2_ardupilot_SITL
 ./run.sh
+```
+Terminal 1 (Launch the container without GPU support):
+```bash
+cd ~/ros2_ardupilot_SITL
+./run_without_gpu.sh
 ```
 
 Terminal 2 (Connect to the running container):
 ```bash
 docker exec -it ardupilot_sitl /bin/bash
 mavproxy.py --console --map --aircraft test --master=:14550
-```
-
-## 🏗️ Building Projects
-
-The workspace comes pre-built, but if you need to rebuild:
-
-```bash
-cd ~/ros2_ws
-colcon test --packages-select ardupilot_dds_tests
-colcon build --packages-up-to ardupilot_sitl
-colcon build --packages-up-to ardupilot_gz_bringup
-source install/setup.bash
 ```
 
 ## 🐳 Container Environment
@@ -182,29 +175,6 @@ You can modify the `Dockerfile` to add additional dependencies or change the bui
   ```bash
   echo "UID: $(id -u), GID: $(id -g)"
   ```
-  
-- **🔄 DevContainer Issues**: Check that your Docker is properly configured and that the Remote - Containers extension is up to date.
-
-- **📦 ROS2 Package Not Found**: If you get package not found errors, make sure you've sourced the workspace:
-  ```bash
-  source ~/ros2_ws/install/setup.bash
-  ```
-
-- **🌎 Gazebo Models Not Loading**: Set the GAZEBO_MODEL_PATH environment variable:
-  ```bash
-  export GAZEBO_MODEL_PATH=$GAZEBO_MODEL_PATH:~/ros2_ws/src/ardupilot_gz/models
-  ```
-
-- **ardupilot_gazebo package not built**:
-   Solution:
-   ```bash
-   cd ~/ros2_ws
-   rm -rf build/ardupilot_gazebo/
-   rm -rf install/ardupilot_gazebo/
-   ```
-   ```bash
-   colcon build --packages-select ardupilot_gazebo
-   ```
 
 ## 📄 License
 
