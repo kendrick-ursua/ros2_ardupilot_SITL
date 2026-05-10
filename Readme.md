@@ -35,8 +35,8 @@
 
 1. Clone this repository:
    ```bash
-   git clone https://github.com/Jagadeesh-pradhani/ROS2_ardupilot_Iris_docker.git
-   cd ardupilot-ros2-docker
+   git clone git@github.com:kendrick-ursua/ros2_ardupilot_SITL.git
+   cd ros2_ardupilot_SITL
    ```
 
 2. Build and start the container:

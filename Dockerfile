@@ -54,6 +54,8 @@ RUN cd ~/ \
 RUN cd ~/Micro-XRCE-DDS-Gen \
     && ./gradlew assemble
 
+ENV PATH="/home/ros/Micro-XRCE-DDS-Gen/scripts:${PATH}"
+
 RUN cd ~/ \
     && git clone https://github.com/ArduPilot/ardupilot.git \
     && cd ardupilot \
@@ -133,8 +135,13 @@ RUN cd ~/ardupilot/Tools/autotest \
 RUN /bin/bash -c "source /opt/ros/humble/setup.bash"
 
 #Build
-RUN cd ~/ros2_ws/ \
-    && colcon build --packages-up-to ardupilot_sitl || true
+RUN touch ~/ardupilot/.colcon_ignore && \
+    /bin/bash -c "source /opt/ros/humble/setup.bash && \
+    source ~/ros2_ws/install/setup.bash && \
+    cd ~/ros2_ws && \
+    colcon build --packages-up-to ardupilot_sitl \
+    --parallel-workers 1 --executor sequential \
+    --event-handlers console_direct+"
 RUN /bin/bash -c "source ~/ros2_ws/install/setup.bash"
 
 #ROS2 with SITL in GAZEBO
@@ -142,21 +149,43 @@ RUN cd ~/ros2_ws \
     && vcs import --input https://raw.githubusercontent.com/Jagadeesh-pradhani/ROS2_ardupilot_Iris_docker/main/ros2_gz.repos --recursive src || true  \
     && /bin/bash -c "source /opt/ros/humble/setup.bash" \
     && sudo apt update \
+    && rosdep init \
     && rosdep update \
     && rosdep install -y --from-paths src --ignore-src -r || true
 
 
 #Build
-RUN cd ~/ros2_ws \
-    && colcon build --packages-up-to ardupilot_gz_bringup || true
+RUN cd ~/ros2_ws && \
+    rm -rf src/ros_gz && \
+    git clone -b humble https://github.com/gazebosim/ros_gz.git src/ros_gz
+RUN sudo apt-get update && sudo apt-get install -y \
+    rapidjson-dev \
+    libgstreamer1.0-dev \
+    libgstreamer-plugins-base1.0-dev
+RUN /bin/bash -c "\
+    source /opt/ros/humble/setup.bash && \
+    source ~/ros2_ws/install/setup.bash && \
+    cd ~/ros2_ws && \
+    rm -rf build/ardupilot_gz_bringup install/ardupilot_gz_bringup log/ardupilot_gz_bringup && \
+    colcon build --packages-up-to ardupilot_gz_bringup \
+    --parallel-workers 1 --executor sequential \
+    --event-handlers console_direct+"
 RUN /bin/bash -c "source ~/ros2_ws/install/setup.bash"
 
 
 RUN cd ~/ros2_ws/src/ \
     && git clone https://github.com/ArduPilot/ardupilot_ros.git \
     && cd ~/ros2_ws/ \
-    && rosdep install --from-paths src --ignore-src -r -y --skip-keys gazebo-ros-pkgs \
-    && colcon build --packages-up-to ardupilot_ros --parallel-workers 12 || true
+    && rosdep install --from-paths src --ignore-src -r -y --skip-keys gazebo-ros-pkgs
+RUN cd ~/ros2_ws \
+    && /bin/bash -c "source /opt/ros/humble/setup.bash" \
+    && colcon build --packages-up-to ardupilot_ros --parallel-workers 1 --executor sequential
+
+RUN cd ~/ros2_ws \
+    && rm -rf build/ardupilot_gazebo install/ardupilot_gazebo log/ardupilot_gazebo
+RUN /bin/bash -c "source /opt/ros/humble/setup.bash" \
+    && cd ~/ros2_ws \
+    && colcon build --packages-select ardupilot_gazebo --event-handlers console_direct+
 
 # Copy local src folder to ros_ws 
 COPY ./src/ /home/ros/ros2_ws/src/

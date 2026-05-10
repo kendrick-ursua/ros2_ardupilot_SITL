@@ -27,4 +27,5 @@ services:
     tty: true
     working_dir: /home/ros/ros2_ws/src
     entrypoint: ["/bin/bash", "/entrypoint.sh"]
+    command: bash
     
