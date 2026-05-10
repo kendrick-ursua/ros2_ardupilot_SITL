@@ -125,10 +125,13 @@ RUN cd ~/ardupilot \
     && ./waf clean \
     && ./waf configure --board sitl \
     && ./waf copter -v 
+ENV PATH="/home/ros/ardupilot/Tools/autotest:$PATH"
 
 RUN cd ~/ardupilot/Tools/autotest \
     && sudo pip3 install MAVProxy \
-    && sudo pip3 install MAVProxy[joystick]
+    && sudo pip3 install MAVProxy[joystick] \
+    && sudo apt-get install -y python3-wxgtk4.0 \
+    && sudo pip3 install MAVProxy --upgrade
     
 
 

@@ -91,18 +91,17 @@ Run the following commands to test SITL with different options. After running, c
 
 ```bash
 # Basic ArduCopter simulation
-cd ~/ardupilot
-./sim_vehicle.py -v ArduCopter -w
+sim_vehicle.py -v ArduCopter -w
 
 # ArduCopter with console and map
-./sim_vehicle.py -v ArduCopter --console --map
+sim_vehicle.py -v ArduCopter --console --map
 
 # ArduCopter at San Francisco International Airport
-./sim_vehicle.py -v ArduCopter -L KSFO --console --map
+sim_vehicle.py -v ArduCopter -L KSFO --console --map
 
 
 # ArduCopter in quadcopter configuration with console, map, and OSD
-./sim_vehicle.py -v ArduCopter -f quadcopter --console --map --osd
+sim_vehicle.py -v ArduCopter -f quadcopter --console --map --osd
 ```
 
 ### 🤖 Testing ROS2 with SITL
