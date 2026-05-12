@@ -58,7 +58,7 @@ vcs import --recursive --input  https://raw.githubusercontent.com/ArduPilot/ardu
 cd ~/ros2_ws
 sudo apt update
 rosdep update
-source /opt/ros/humble/setup.bash
+source /opt/ros/jazzy/setup.bash
 rosdep install --from-paths src --ignore-src
 
 #build workspace
@@ -115,7 +115,7 @@ source ~/.bashrc
 
 
 #ROS2 with SITL
-source /opt/ros/humble/setup.bash
+source /opt/ros/jazzy/setup.bash
 cd ~/ros2_ws/
 colcon build --packages-up-to ardupilot_sitl
 source ~/ros2_ws/install/setup.bash
@@ -137,7 +137,7 @@ source ~/.bashrc
 -------------------------------------------
 
 cd ~/ros2_ws
-source /opt/ros/humble/setup.bash
+source /opt/ros/jazzy/setup.bash
 sudo apt update
 rosdep update
 rosdep install -y --from-paths src --ignore-src -r

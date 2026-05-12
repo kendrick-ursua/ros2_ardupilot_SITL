@@ -6,7 +6,7 @@
   <div align="center">
   <img src="https://github.com/farshidrayhancv/ROS2_ardupilot_Iris_docker/blob/main/Sample_1.png?raw=true" alt="ArduPilot ROS2 Docker Environment Preview" width="100%">
   <p>
-    A complete Docker environment for developing with ArduPilot, ROS2 Humble, and Gazebo Harmonic
+    A complete Docker environment for developing with ArduPilot, ROS2 jazzy, and Gazebo Harmonic
   </p>
 </div>
 
@@ -14,7 +14,7 @@
 
 ## ✨ Features
 
-- 🐳 Pre-configured Docker environment with ROS2 Humble
+- 🐳 Pre-configured Docker environment with ROS2 jazzy
 - 🛩️ ArduPilot SITL (Software In The Loop) integration
 - 🌎 Gazebo Harmonic for simulation
 - 🔌 ArduPilot-Gazebo plugins and integration
@@ -136,7 +136,7 @@ mavproxy.py --console --map --aircraft test --master=:14550
 
 The Docker container includes:
 
-- 🤖 ROS2 Humble Desktop
+- 🤖 ROS2 jazzy Desktop
 - 🌎 Gazebo Harmonic
 - 🚁 ArduPilot source code with SITL capabilities
 - 📡 MAVProxy
@@ -183,6 +183,6 @@ This project is licensed under the MIT License - see the LICENSE file for detail
 ## 🙏 Acknowledgements
 
 - [🚁 ArduPilot](https://ardupilot.org/) - ArduPilot project
-- [🤖 ROS2](https://docs.ros.org/en/humble/) - ROS2 Humble documentation
+- [🤖 ROS2](https://docs.ros.org/en/jazzy/) - ROS2 jazzy documentation
 - [🌎 Gazebo](https://gazebosim.org/) - Gazebo simulation platform
 - [🔌 ArduPilot-Gazebo-ROS2 Integration](https://github.com/ArduPilot/ardupilot_gz) - ArduPilot Gazebo integration

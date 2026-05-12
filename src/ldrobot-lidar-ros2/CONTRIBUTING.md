@@ -4,7 +4,7 @@
 Code contributions should be made via pull requests to the appropriate repository:
 * [ldrobot-lidar-ros2](https://github.com/Myzhar/ldrobot-lidar-ros2/pulls)
 
-As a contributor please follow the practices explained in [ROS2 documentation](https://docs.ros.org/en/humble/The-ROS2-Project/Contributing/Code-Style-Language-Versions.html).
+As a contributor please follow the practices explained in [ROS2 documentation](https://docs.ros.org/en/jazzy/The-ROS2-Project/Contributing/Code-Style-Language-Versions.html).
 
 Before submitting a pull request please perform this list of tasks from the root of your ROS2 workspace:
 1. Automatic code formatting: 

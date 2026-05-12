@@ -41,15 +41,15 @@ CHANGELOG
 
 - Add direct serial port connection feature
 
-v0.2.0 - Humble
+v0.2.0 - jazzy
 ---------------
 
 - Change license from MIT to Apache-2.0
-- Code refactoring to meet [ROS2 rules](https://docs.ros.org/en/humble/The-ROS2-Project/Contributing/Code-Style-Language-Versions.html)
+- Code refactoring to meet [ROS2 rules](https://docs.ros.org/en/jazzy/The-ROS2-Project/Contributing/Code-Style-Language-Versions.html)
 - Add CONTRIBUTING.md
 - Add udev rules and install scripts
 - Fix issue with Rviz2 config files
-- Fix `nav2_lifecycle_manager` interaction in ROS2 Humble
+- Fix `nav2_lifecycle_manager` interaction in ROS2 jazzy
   - Derive `ldlidar::LdLidarComponent` from `nav2_util::LifecycleNode` instead of `rclcpp::LifecycleNode` 
 - Improve parameter handling
 - Set default QoS to `rclcpp::SensorDataQoS`

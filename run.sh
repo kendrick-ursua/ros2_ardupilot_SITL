@@ -13,7 +13,7 @@ docker run -it \
   -e GZ_VERSION=harmonic \
   --entrypoint /bin/bash \
   ros2_ardupilot_sitl-ardupilot_ros:latest \
-  -c "source /opt/ros/humble/setup.bash && \
+  -c "source /opt/ros/jazzy/setup.bash && \
       cd ~/ros2_ws && \
       source install/setup.bash && \
       ros2 launch ardupilot_gz_bringup iris_runway.launch.py"
