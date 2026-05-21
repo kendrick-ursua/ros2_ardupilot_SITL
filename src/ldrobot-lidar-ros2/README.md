@@ -34,7 +34,7 @@ LD19 Lifecycle            |  LD19 outdoor
 
 The node is designed to work with
 
-- [ROS 2 Humble](https://docs.ros.org/en/humble/index.html)
+- [ROS 2 jazzy](https://docs.ros.org/en/jazzy/index.html)
 - [ROS 2 Jazzy](https://docs.ros.org/en/jazzy/index.html)
 
 > :pushpin: **Note**: [ROS 2 Rolling](https://docs.ros.org/en/rolling/index.html) is not yet supported because of the missing `nav2_utils` dependency

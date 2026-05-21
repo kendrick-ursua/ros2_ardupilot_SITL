@@ -1,7 +1,7 @@
 #Created By Jagadeesh-P
-#03-08-2024
+#03-08-2024 | Migrated to Jazzy - 2024
 
-FROM osrf/ros:humble-desktop
+FROM osrf/ros:jazzy-desktop
 
 # Install necessary programs
 RUN apt-get update \
@@ -17,7 +17,7 @@ RUN apt-get update \
 
 # Create a non-root user
 ARG USERNAME=ros
-ARG USER_UID=1000
+ARG USER_UID=1001
 ARG USER_GID=$USER_UID
 
 RUN groupadd --gid $USER_GID $USERNAME \
@@ -28,27 +28,26 @@ RUN groupadd --gid $USER_GID $USERNAME \
 RUN echo $USERNAME ALL=\(root\) NOPASSWD:ALL > /etc/sudoers.d/$USERNAME \
   && chmod 0440 /etc/sudoers.d/$USERNAME
 
-# Install gz-harmonic
+# Install gz-harmonic (Gazebo Harmonic is the pairing for Jazzy)
 RUN curl https://packages.osrfoundation.org/gazebo.gpg --output /usr/share/keyrings/pkgs-osrf-archive-keyring.gpg \
     && echo "deb [arch=$(dpkg --print-architecture) signed-by=/usr/share/keyrings/pkgs-osrf-archive-keyring.gpg] http://packages.osrfoundation.org/gazebo/ubuntu-stable $(lsb_release -cs) main" | tee /etc/apt/sources.list.d/gazebo-stable.list > /dev/null \
     && apt-get update \
     && apt-get install -y gz-harmonic
 
 ENV GZ_VERSION=harmonic
-
-
+ENV PIP_BREAK_SYSTEM_PACKAGES=1
 
 ####################################################################################################
 # Set up ROS 2 workspace
 USER $USERNAME
 WORKDIR /home/$USERNAME
-#COPY ardupilot /home/${USERNAME}/ardupilot
-#COPY Micro-XRCE-DDS-Gen /home/${USERNAME}/Micro-XRCE-DDS-Gen
 
+RUN sudo apt install -y openjdk-17-jdk \
+    && sudo apt-get install -y gitk git-gui \
+    && sudo apt-get install -y gcc-arm-none-eabi
 
-RUN sudo apt install default-jre \
-    && sudo apt-get install gitk git-gui \
-    && sudo apt-get install gcc-arm-none-eabi -y
+ENV JAVA_HOME=/usr/lib/jvm/java-17-openjdk-amd64
+ENV PATH=$JAVA_HOME/bin:$PATH
 
 RUN cd ~/ \
     && git clone --recurse-submodules https://github.com/ardupilot/Micro-XRCE-DDS-Gen.git
@@ -63,119 +62,113 @@ RUN cd ~/ \
     && git submodule update --init --recursive \
     && git submodule init \
     && git submodule update \
-    && git status 
+    && git status
 
 RUN cd ~/ardupilot \
-    && ./waf distclean \
     && ./waf distclean \
     && ./waf configure --board MatekF405-Wing
 
 # Extra WS
-
-RUN mkdir -p ~/ws/src \
-    && cd ~/ws
+RUN mkdir -p ~/ws/src
 
 COPY extra.repos /home/${USERNAME}/ws/extra.repos
 
 RUN cd ~/ws/ \
-    && vcs import --recursive --input  https://raw.githubusercontent.com/Jagadeesh-pradhani/ROS2_ardupilot_Iris_docker/main/extra.repos src    \
+    && vcs import --recursive --input /home/${USERNAME}/ws/extra.repos src \
     && sudo apt update \
     && rosdep update \
-    && /bin/bash -c "source /opt/ros/humble/setup.bash"   \
+    && /bin/bash -c "source /opt/ros/jazzy/setup.bash" \
     && rosdep install -y --from-paths src --ignore-src
 
-#BUild ws
+# Build ws
 RUN cd ~/ws \
     && colcon build || true
 RUN /bin/bash -c "source ~/ws/install/setup.bash"
 
-
 #### ROS2 WS
 
-RUN mkdir -p ~/ros2_ws/src \
-    && cd ~/ros2_ws
+RUN mkdir -p ~/ros2_ws/src
 
 COPY ros2.repos /home/${USERNAME}/ros2_ws/ros2.repos
 COPY ros2_gz.repos /home/${USERNAME}/ros2_ws/ros2_gz.repos
 
-
-
 RUN cd ~/ros2_ws/ \
-    && vcs import --recursive --input  https://raw.githubusercontent.com/Jagadeesh-pradhani/ROS2_ardupilot_Iris_docker/main/ros2.repos src    \
+    && vcs import --recursive --input /home/${USERNAME}/ros2_ws/ros2.repos src \
     && sudo apt update \
     && rosdep update \
-    && /bin/bash -c "source /opt/ros/humble/setup.bash"   \
+    && /bin/bash -c "source /opt/ros/jazzy/setup.bash" \
     && rosdep install -y --from-paths src --ignore-src
-    
 
-#BUild
-RUN cd ~/ros2_ws \
-    && colcon build --packages-up-to ardupilot_dds_tests || true
+# Build ardupilot_dds_tests 
+RUN /bin/bash -c "source /opt/ros/jazzy/setup.bash \
+    && cd ~/ros2_ws \
+    && colcon build --packages-up-to ardupilot_dds_tests || true"
 RUN /bin/bash -c "source ~/ros2_ws/install/setup.bash"
 
 RUN sudo rm /home/${USERNAME}/ardupilot/Tools/environment_install/install-prereqs-ubuntu.sh
 COPY install-prereqs-ubuntu.sh /home/${USERNAME}/ardupilot/Tools/environment_install/install-prereqs-ubuntu.sh
 
-
 RUN cd ~/ardupilot \
     && sudo apt-get install -y python3-pip \
-    && sudo pip3 install future \
+    && sudo pip3 install future --break-system-packages \
     && Tools/environment_install/install-prereqs-ubuntu.sh -y || true \
     && sudo apt-get install -y python3-pexpect \
     && ./waf clean \
     && ./waf configure --board sitl \
-    && ./waf copter -v 
+    && ./waf copter -v
 ENV PATH="/home/ros/ardupilot/Tools/autotest:$PATH"
 
 RUN cd ~/ardupilot/Tools/autotest \
-    && sudo pip3 install MAVProxy \
-    && sudo pip3 install MAVProxy[joystick] \
+    && sudo pip3 install MAVProxy --break-system-packages \
+    && sudo pip3 install "MAVProxy[joystick]" --break-system-packages \
     && sudo apt-get install -y python3-wxgtk4.0 \
-    && sudo pip3 install MAVProxy --upgrade
-    
+    && sudo pip3 install MAVProxy --upgrade --break-system-packages
 
-
-#ROS2 with SITL
-RUN /bin/bash -c "source /opt/ros/humble/setup.bash \
+# ROS2 with SITL
+RUN /bin/bash -c "source /opt/ros/jazzy/setup.bash \
     && cd ~/ros2_ws \
-    && MAKEFLAGS='-j1' colcon build --packages-up-to ardupilot_sitl \
+    && MAKEFLAGS='-j1' colcon build \
+        --packages-up-to ardupilot_sitl \
         --parallel-workers 1 --executor sequential"
 
-#ROS2 with SITL in GAZEBO
+# ROS2 with SITL in GAZEBO — import gz repos
 RUN cd ~/ros2_ws \
-    && vcs import --input https://raw.githubusercontent.com/Jagadeesh-pradhani/ROS2_ardupilot_Iris_docker/main/ros2_gz.repos --recursive src || true  \
-    && /bin/bash -c "source /opt/ros/humble/setup.bash" \
+    && vcs import --input /home/${USERNAME}/ros2_ws/ros2_gz.repos --recursive src || true \
     && sudo apt update \
     && rosdep update \
+    && /bin/bash -c "source /opt/ros/jazzy/setup.bash" \
     && rosdep install -y --from-paths src --ignore-src -r || true
 
-
-#Build
-RUN /bin/bash -c "source /opt/ros/humble/setup.bash \
+# Build up to ardupilot_gz_bringup
+RUN /bin/bash -c "source /opt/ros/jazzy/setup.bash \
     && source ~/ros2_ws/install/setup.bash \
     && cd ~/ros2_ws \
-    && MAKEFLAGS='-j1' colcon build --packages-up-to ardupilot_gz_bringup --parallel-workers 1 --executor sequential"
+    && MAKEFLAGS='-j1' colcon build \
+        --packages-up-to ardupilot_gz_bringup \
+        --parallel-workers 1 --executor sequential \
+        --cmake-args \
+            -Dyaml_cpp_LIBRARIES=/usr/lib/x86_64-linux-gnu/libyaml-cpp.so \
+            -DCMAKE_EXE_LINKER_FLAGS='-lyaml-cpp' \
+            -DCMAKE_SHARED_LINKER_FLAGS='-lyaml-cpp'"
 
-
-RUN /bin/bash -c "source /opt/ros/humble/setup.bash \
+# ardupilot_ros
+RUN /bin/bash -c "source /opt/ros/jazzy/setup.bash \
     && cd ~/ros2_ws/src/ \
     && git clone https://github.com/ArduPilot/ardupilot_ros.git \
     && cd ~/ros2_ws/ \
     && rosdep install --from-paths src --ignore-src -r -y --skip-keys gazebo-ros-pkgs \
-    && MAKEFLAGS='-j1' colcon build --packages-up-to ardupilot_ros --parallel-workers 1 --executor sequential"
+    && MAKEFLAGS='-j1' colcon build \
+        --packages-up-to ardupilot_ros \
+        --parallel-workers 1 --executor sequential"
 
-# Copy local src folder to ros_ws 
+# Copy local src folder to ros2_ws
 COPY ./src/ /home/ros/ros2_ws/src/
 
 ####################################################################################################
 
-
-
-# Copy the entrypoint and bashrc scripts so we have our container's environment set up correctly
+# Copy the entrypoint and bashrc scripts
 COPY entrypoint.sh /entrypoint.sh
 COPY bashrc /home/${USERNAME}/.bashrc
 
-
-# Set up entrypoint and default command
 ENTRYPOINT ["/bin/bash", "/entrypoint.sh"]
 CMD ["bash"]

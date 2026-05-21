@@ -25,7 +25,7 @@ If applicable, add screenshots to help explain your problem.
 
 **Desktop (please complete the following information):**
  - OS: [e.g. iOS]
- - ROS2 version: [e.g. Humble]
+ - ROS2 version: [e.g. jazzy]
  - Device type: [e.g. Rpi4, Nvidia Jetson Nano, ecc]
 
 **Additional context**
