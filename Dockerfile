@@ -171,6 +171,9 @@ RUN sudo apt-get update \
 
 RUN sudo /opt/ros/jazzy/lib/mavros/install_geographiclib_datasets.sh
 
+# Copy mavros launch/config/scripts into the container
+COPY ./mavros/ /home/${USERNAME}/mavros/
+
 # Copy local src folder to ros2_ws
 COPY ./src/ /home/ros/ros2_ws/src/
 
