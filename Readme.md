@@ -2,7 +2,6 @@
 
 <div align="center">
 
-
   <div align="center">
   <img src="https://github.com/farshidrayhancv/ROS2_ardupilot_Iris_docker/blob/main/Sample_1.png?raw=true" alt="ArduPilot ROS2 Docker Environment Preview" width="100%">
   <p>
@@ -19,6 +18,7 @@
 - 🌎 Gazebo Harmonic for simulation
 - 🔌 ArduPilot-Gazebo plugins and integration
 - 📡 DDS middleware for ArduPilot communication
+- 📻 **MAVROS** — MAVLink bridge for ROS2 ↔ ArduPilot SITL communication
 - 🏗️ Ready-to-use development workspace
 - 💻 Visual Studio Code DevContainer support for seamless development
 
@@ -75,6 +75,13 @@ The DevContainer configuration is located in the `.devcontainer` directory, cont
 ├── instruction.sh             # Additional instructions
 ├── ros2_gz.repos              # ROS2 Gazebo repos file
 ├── ros2.repos                 # ROS2 repos file
+├── mavros/                    # MAVROS integration (NEW)
+│   ├── launch/
+│   │   └── mavros_sitl.launch.py   # MAVROS launch file for SITL
+│   ├── config/
+│   │   └── mavros_params.yaml      # MAVROS ROS2 parameter overrides
+│   └── scripts/
+│       └── arm_and_takeoff.py      # Example: arm & take off via MAVROS
 ├── workspace                  # Shared workspace directory
 └── .devcontainer/             # VS Code DevContainer configuration
     ├── devcontainer.json
@@ -110,7 +117,59 @@ sim_vehicle.py -v ArduCopter -f quadcopter --console --map --osd
 # Launch ROS2 with SITL using DDS over UDP
 cd ~/ros2_ws
 source install/setup.bash
-ros2 launch ardupilot_sitl sitl_dds_udp.launch.py transport:=udp4 refs:=$(ros2 pkg prefix ardupilot_sitl)/share/ardupilot_sitl/config/dds_xrce_profile.xml synthetic_clock:=True wipe:=False model:=quad speedup:=1 slave:=0 instance:=0 defaults:=$(ros2 pkg prefix ardupilot_sitl)/share/ardupilot_sitl/config/default_params/copter.parm,$(ros2 pkg prefix ardupilot_sitl)/share/ardupilot_sitl/config/default_params/dds_udp.parm sim_address:=127.0.0.1 master:=tcp:127.0.0.1:5760 sitl:=127.0.0.1:5501
+ros2 launch ardupilot_sitl sitl_dds_udp.launch.py transport:=udp4 refs:=$(ros2 pkg prefix ardupilot_sitl)/share/ardupilot_sitl/config/dds_xrce_profile.xml synthetic_clock:=True wipe:=False model:[...]
+```
+
+### 📻 Running MAVROS with ArduPilot SITL
+
+MAVROS provides a MAVLink bridge between ROS2 and the ArduPilot SITL instance.
+
+#### Prerequisites inside the container
+
+MAVROS and its dependencies are installed automatically as part of the Docker build. If you need to install them manually:
+
+```bash
+sudo apt-get install -y ros-jazzy-mavros ros-jazzy-mavros-extras
+ros2 run mavros install_geographiclib_datasets.sh
+```
+
+#### Terminal 1 — Start ArduPilot SITL
+
+```bash
+# Inside the container
+sim_vehicle.py -v ArduCopter --console --out udp:127.0.0.1:14550
+```
+
+#### Terminal 2 — Launch MAVROS
+
+```bash
+# Inside the container
+cd ~/ros2_ws
+source install/setup.bash
+ros2 launch ~/ros2_ardupilot_SITL/mavros/launch/mavros_sitl.launch.py
+```
+
+The default FCU URL is `udp://:14550@127.0.0.1:14555`, which matches the SITL output port. Override it if needed:
+
+```bash
+ros2 launch ~/ros2_ardupilot_SITL/mavros/launch/mavros_sitl.launch.py \
+    fcu_url:=udp://:14550@127.0.0.1:14555
+```
+
+#### Terminal 3 — Verify connection
+
+```bash
+# Check FCU state
+ros2 topic echo /mavros/state
+
+# List all MAVROS topics
+ros2 topic list | grep mavros
+```
+
+#### Example — Arm and take off
+
+```bash
+python3 ~/ros2_ardupilot_SITL/mavros/scripts/arm_and_takeoff.py
 ```
 
 ### 🌐 Final Simulation (Multi-Terminal)
@@ -140,6 +199,7 @@ The Docker container includes:
 - 🌎 Gazebo Harmonic
 - 🚁 ArduPilot source code with SITL capabilities
 - 📡 MAVProxy
+- 📻 MAVROS & MAVROS extras (ROS2 ↔ MAVLink bridge)
 - 🔄 Micro-XRCE-DDS-Gen for DDS communication
 - 📦 All ROS2 packages needed for ArduPilot-ROS2 integration
 - 🔌 ROS2-Gazebo bridges and plugins
@@ -163,9 +223,23 @@ The Docker container includes:
    ros2 run --prefix 'gdb -ex run --args' package_name node_name
    ```
 
+5. **MAVROS connection troubleshooting**: If MAVROS cannot reach the FCU, verify the UDP ports match between SITL (`--out` flag) and the `fcu_url` launch argument. Run `ros2 topic echo /mavros/state` to confirm `connected: True`.
+
 ## ⚙️ Customization
 
 You can modify the `Dockerfile` to add additional dependencies or change the build configuration.
+
+To add MAVROS to the image build, append the following block to the `Dockerfile` before the `COPY entrypoint.sh` line:
+
+```dockerfile
+# Install MAVROS
+RUN sudo apt-get update \
+    && sudo apt-get install -y \
+        ros-jazzy-mavros \
+        ros-jazzy-mavros-extras \
+    && ros2 run mavros install_geographiclib_datasets.sh \
+    && sudo rm -rf /var/lib/apt/lists/*
+```
 
 ## 🔧 Troubleshooting
 
@@ -175,6 +249,8 @@ You can modify the `Dockerfile` to add additional dependencies or change the bui
   ```bash
   echo "UID: $(id -u), GID: $(id -g)"
   ```
+
+- **📻 MAVROS not connecting**: Ensure ArduPilot SITL is running and the UDP port in `fcu_url` matches the `--out` argument passed to `sim_vehicle.py`. Default is port `14550`.
 
 ## 📄 License
 
@@ -186,3 +262,4 @@ This project is licensed under the MIT License - see the LICENSE file for detail
 - [🤖 ROS2](https://docs.ros.org/en/jazzy/) - ROS2 jazzy documentation
 - [🌎 Gazebo](https://gazebosim.org/) - Gazebo simulation platform
 - [🔌 ArduPilot-Gazebo-ROS2 Integration](https://github.com/ArduPilot/ardupilot_gz) - ArduPilot Gazebo integration
+- [📻 MAVROS](https://github.com/mavlink/mavros) - MAVLink ROS2 bridge

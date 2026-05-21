@@ -1,0 +1,27 @@
+# MAVROS parameter overrides for ArduPilot SITL
+# Loaded automatically when using mavros_sitl.launch.py
+
+mavros:
+  ros__parameters:
+    # Connection
+    fcu_url: "udp://:14550@127.0.0.1:14555"
+    gcs_url: ""
+    target_system_id: 1
+    target_component_id: 1
+
+    # Frame IDs
+    local_position:
+      frame_id: "map"
+      tf:
+        send: true
+        frame_id: "map"
+        child_frame_id: "base_link"
+        listen: false
+
+    global_position:
+      frame_id: "map"
+      child_frame_id: "base_link"
+      rot_covariance: 99999.0
+
+    imu:
+      frame_id: "base_link"
