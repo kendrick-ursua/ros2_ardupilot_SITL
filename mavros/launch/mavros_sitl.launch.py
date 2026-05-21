@@ -35,10 +35,11 @@ def generate_launch_description():
     )
 
     # ── MAVROS node ───────────────────────────────────────────────────────────
+    # NOTE: do NOT set name='mavros' here — combined with namespace='mavros'
+    # it produces /mavros/mavros/... double-namespaced services that crash on startup.
     mavros_node = Node(
         package='mavros',
         executable='mavros_node',
-        name='mavros',
         namespace='mavros',
         output='screen',
         parameters=[
