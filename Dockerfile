@@ -162,14 +162,14 @@ RUN /bin/bash -c "source /opt/ros/jazzy/setup.bash \
         --parallel-workers 1 --executor sequential"
 
 # Install MAVROS and GeographicLib datasets
+# Note: install_geographiclib_datasets.sh is called directly to avoid sudo stripping PATH
 RUN sudo apt-get update \
     && sudo apt-get install -y \
         ros-jazzy-mavros \
         ros-jazzy-mavros-extras \
     && sudo rm -rf /var/lib/apt/lists/*
 
-RUN /bin/bash -c "source /opt/ros/jazzy/setup.bash \
-    && sudo ros2 run mavros install_geographiclib_datasets.sh"
+RUN sudo /opt/ros/jazzy/lib/mavros/install_geographiclib_datasets.sh
 
 # Copy local src folder to ros2_ws
 COPY ./src/ /home/ros/ros2_ws/src/
