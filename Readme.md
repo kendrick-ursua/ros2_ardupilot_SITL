@@ -84,11 +84,24 @@ cd ~/ros2_ardupilot_SITL
 ./run_without_gpu.sh
 ```
 
-Terminal 2 (Connect to the running container):
+Terminal 2 (Launch MAVProxy):
 ```bash
-docker exec -it ardupilot_sitl /bin/bash
-mavproxy.py --console --map --aircraft test --master=:14550
+cd ~/ros2_ardupilot_SITL
+./run_mavproxy.sh
 ```
+> ⚠️ **Note:** MAVRos and MAVProxy conflict with each other's connection to ArduPilot SITL. **Draw waypoint mission first before running MAVRos.**
+
+Terminal 3 (Launch MAVRos):
+```bash
+ros2 launch mavros apm.launch   fcu_url:=udp://127.0.0.1:14550@14555
+```
+After setting up waypoints, use the following sequence in the MAVProxy terminal:
+ 
+1. `guided 100`
+2. `arm throttle`
+3. `takeoff 100`
+4. `auto`
+
 
 ## 🛰️ GPS Denied Setup using Air-IO
 
