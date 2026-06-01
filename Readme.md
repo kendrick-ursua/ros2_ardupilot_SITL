@@ -139,6 +139,11 @@ source install/setup.bash
 ros2 launch air_io air_io_sitl.launch.py
 ```
 
+## 📝 To Do
+ 
+1. Find a way to bypass velocity z in ZUPT function
+2. Fix RTL function which leads to straight-line XY trajectory from its current position instead of going back to home position
+
 ## 🐳 Container Environment
 
 The Docker container includes:
