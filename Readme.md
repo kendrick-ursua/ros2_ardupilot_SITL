@@ -6,7 +6,7 @@
   <div align="center">
   <img src="https://github.com/farshidrayhancv/ROS2_ardupilot_Iris_docker/blob/main/Sample_1.png?raw=true" alt="ArduPilot ROS2 Docker Environment Preview" width="100%">
   <p>
-    A complete Docker environment for developing with ArduPilot, ROS2 Humble, and Gazebo Harmonic
+    A complete Docker environment for developing with ArduPilot, ROS2 Jazzy, and Gazebo Harmonic
   </p>
 </div>
 
@@ -14,7 +14,7 @@
 
 ## ✨ Features
 
-- 🐳 Pre-configured Docker environment with ROS2 Humble
+- 🐳 Pre-configured Docker environment with ROS2 Jazzy
 - 🛩️ ArduPilot SITL (Software In The Loop) integration
 - 🌎 Gazebo Harmonic for simulation
 - 🔌 ArduPilot-Gazebo plugins and integration
@@ -27,7 +27,9 @@
 - 🐳 Docker installed on your system
 - 🔄 Docker Compose installed on your system
 - 🖥️ X11 server running for GUI applications (on Linux this is normally running by default)
-- 💻 Visual Studio Code with Remote - Containers extension (for DevContainer support)
+- 🐧 Ubuntu 24.04 LTS Operating System
+- 🤖 Ros2 Jazzy installed on your system
+- Dapat medyo pogi gagamit
 
 ## 🚀 Quick Start
 
@@ -161,7 +163,7 @@ ros2 launch air_io air_io_sitl.launch.py
 
 The Docker container includes:
 
-- 🤖 ROS2 Humble Desktop
+- 🤖 ROS2 Jazzy Desktop
 - 🌎 Gazebo Harmonic
 - 🚁 ArduPilot source code with SITL capabilities
 - 📡 MAVProxy
