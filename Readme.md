@@ -51,17 +51,6 @@ Note: This might take a while. Better travel and grab a coffee at Starbs Tagayta
    docker compose exec ardupilot_ros bash
    ```
 
-### 💻 Using Visual Studio Code DevContainer
-
-1. Install the "Remote - Containers" extension in VS Code
-2. Clone this repository and open it in VS Code
-3. Click on the green button in the bottom-left corner of VS Code
-4. Select "Reopen in Container" from the menu
-5. VS Code will build the container and open it automatically
-
-The DevContainer configuration is located in the `.devcontainer` directory, containing:
-- `devcontainer.json`: Configuration for VS Code integration
-- `docker-compose.yml`: Container configuration for the development environment
 
 ## 📂 Repository Structure
 
@@ -81,37 +70,6 @@ The DevContainer configuration is located in the `.devcontainer` directory, cont
     └── docker-compose.yml
 ```
 
-## 🚁 Using ArduPilot SITL with ROS2
-
-The container includes a helper script `~/Ardupilot_ROS.sh` that provides various testing commands for ArduPilot SITL and ROS2 integration.
-
-### 🧪 Testing ArduPilot SITL
-
-Run the following commands to test SITL with different options. After running, close all processes cleanly using Ctrl+C:
-
-```bash
-# Basic ArduCopter simulation
-sim_vehicle.py -v ArduCopter -w
-
-# ArduCopter with console and map
-sim_vehicle.py -v ArduCopter --console --map
-
-# ArduCopter at San Francisco International Airport
-sim_vehicle.py -v ArduCopter -L KSFO --console --map
-
-
-# ArduCopter in quadcopter configuration with console, map, and OSD
-sim_vehicle.py -v ArduCopter -f quadcopter --console --map --osd
-```
-
-### 🤖 Testing ROS2 with SITL
-
-```bash
-# Launch ROS2 with SITL using DDS over UDP
-cd ~/ros2_ws
-source install/setup.bash
-ros2 launch ardupilot_sitl sitl_dds_udp.launch.py transport:=udp4 refs:=$(ros2 pkg prefix ardupilot_sitl)/share/ardupilot_sitl/config/dds_xrce_profile.xml synthetic_clock:=True wipe:=False model:=quad speedup:=1 slave:=0 instance:=0 defaults:=$(ros2 pkg prefix ardupilot_sitl)/share/ardupilot_sitl/config/default_params/copter.parm,$(ros2 pkg prefix ardupilot_sitl)/share/ardupilot_sitl/config/default_params/dds_udp.parm sim_address:=127.0.0.1 master:=tcp:127.0.0.1:5760 sitl:=127.0.0.1:5501
-```
 
 ### 🌐 Final Simulation (Multi-Terminal)
 
@@ -130,6 +88,55 @@ Terminal 2 (Connect to the running container):
 ```bash
 docker exec -it ardupilot_sitl /bin/bash
 mavproxy.py --console --map --aircraft test --master=:14550
+```
+
+## 🛰️ GPS Denied Setup using Air-IO
+
+### 1. Clone Air-IO
+```bash
+cd ~/ros2_ardupilot_SITL
+git clone https://github.com/Air-IO/Air-IO.git
+```
+
+### 2. Setup Environment and Install Dependencies
+```bash
+cd Air-IO/ && python3 -m venv airvenv
+source airvenv/bin/activate
+cd ~/ros2_ardupilot_SITL/Air-IO && pip install -r requirements.txt
+```
+
+### 3. Download AirIO Pretrained Model
+```bash
+wget https://github.com/Air-IO/Air-IO/releases/download/AirIO/AirIO_Blackbird.zip \
+  && mkdir -p experiments/blackbird/motion_body_rot/ \
+  && unzip AirIO_Blackbird.zip -d ~/ros2_ardupilot_SITL/Air-IO/experiments/blackbird/motion_body_rot \
+  && rm AirIO_Blackbird.zip
+```
+
+### 4. Clone AirIMU
+```bash
+cd ~/ros2_ardupilot_SITL
+git clone https://github.com/haleqiu/AirIMU.git
+```
+
+### 5. Download AirIMU Pretrained Model
+```bash
+cd ~/ros2_ardupilot_SITL/AirIMU
+wget https://github.com/sleepycan/AirIMU/releases/download/pretrained_model_euroc/EuRoCWholeaug.zip \
+  && unzip EuRoCWholeaug.zip \
+  && rm EuRoCWholeaug.zip
+```
+
+### 6. Ros2 setup
+```bash
+cd ~/ros2_ardupilot_SITL/ros2_ws
+colcon build
+source install/setup.bash
+```
+
+### 7. Run Ros2 Launcher for AirIO and AirIMU
+```bash
+ros2 launch air_io air_io_sitl.launch.py
 ```
 
 ## 🐳 Container Environment
