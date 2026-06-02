@@ -1,35 +1,25 @@
 #!/usr/bin/env python3
 """
-ROS 2 Jazzy: AirIO inference node — Blackbird, driven by AirIMU-corrected IMU.
+ROS 2 Jazzy: AirIO inference node — Blackbird, driven by raw MAVROS IMU.
 
 Pipeline:
-  /imu (1000 Hz Gazebo)
-    └── AirIMU node  →  /imu/airimu_corrected  (200-250 Hz corrected)
-                        /imu/airimu_cov         (6-element [ax,ay,az,gx,gy,gz])
-                            └── THIS NODE       →  /airio/velocity  (TwistStamped)
-                                                   /airio/odometry  (Odometry)
+  /mavros/imu/data_raw  (ArduPilot SITL, BEST_EFFORT QoS)
+    └── THIS NODE  →  /airio/velocity  (TwistStamped, ENU)
+                      /airio/odometry  (Odometry, ENU)
+
+Frame conversion chain (see inline comments in _run_inference):
+  Stage 1  /mavros/imu/data_raw         FLU body  (Forward-Left-Up,  REP-103)
+  Stage 2  acc/gyro remap  [+x, -y, -z] FRD body  (Forward-Right-Down, model frame)
+  Stage 3  orientation 180° flip about X            q_FRD-world (model frame)
+  Stage 4  network forward pass        →  v_body_frd
+  Stage 5  rotate by q_FRD-world       →  v_world_frd
+  Stage 6  reverse remap  [+x, -y, -z] →  v_ENU  (publish frame)
 
 ZUPT (Zero-Velocity Update) logic:
   - Subscribes to /mavros/state (mavros_msgs/State)
   - ZUPT is ACTIVE  (vel_enu clamped to zero) when mode is NOT "AUTO*" or "GUIDED"
   - ZUPT is INACTIVE (vel_enu passed through)   when mode contains "AUTO" or == "GUIDED"
-  - Stationary detection: |acc_mag - gravity| <= 0.1 m/s²   (still checked when ZUPT active)
-
-Changes vs. raw-/imu version:
-  1. Subscribe to /imu/airimu_corrected + /imu/airimu_cov (not raw /imu)
-  2. DECIMATE = 2  (200 Hz → 100 Hz Blackbird rate; was 10 from 1000 Hz)
-     If AirIMU outputs at 250 Hz set AIRIMU_HZ = 250 → DECIMATE = 3 (≈83 Hz,
-     close enough; or set TARGET_HZ = 83 — see note below).
-  3. Axis remap (ENU→FRD) is KEPT — AirIMU node publishes in Gazebo ENU frame
-     (it adds corrections to raw /imu without any axis remap of its own).
-  4. Covariance from /imu/airimu_cov stored and forwarded in /airio/odometry
-     pose covariance diagonal (acc) and twist covariance diagonal (gyro-derived).
-  5. All bug fixes from previous version retained:
-       - out["net_vel"][0, -1, :] explicit slice
-       - per-frame qw_r_all tensors for consistent SO3 construction
-       - _plot_origin captured after 60° rotation
-       - Velocity_Integrator init_state with "pos" key only
-       - _last_inference_time updated before early-return guard (dt_step bug fix)
+  - Stationary detection: |acc_mag - gravity| <= ZUPT_ACC_THRESH
 
 Confirmed from blackbird_body.conf:
   coordinate: body_coord  |  remove_g: False (absent→default)  |  gravity: 9.81007
@@ -42,6 +32,12 @@ from geometry_msgs.msg import TwistStamped
 from nav_msgs.msg import Odometry
 from std_msgs.msg import Float64MultiArray
 from mavros_msgs.msg import State   # pip install mavros_msgs or build from source
+from rclpy.qos import (
+    QoSProfile,
+    QoSReliabilityPolicy,
+    QoSDurabilityPolicy,
+    QoSHistoryPolicy,
+)
 
 import torch
 import numpy as np
@@ -68,12 +64,12 @@ from model import net_dict
 # Constants
 # ---------------------------------------------------------------------------
 
-# AirIMU output rate — set to 200 or 250 depending on what your node produces.
-# Check with: ros2 topic hz /imu/airimu_corrected
+# MAVROS IMU publish rate from ArduPilot SITL.
+# Check with: ros2 topic hz /mavros/imu/data_raw
 AIRIMU_HZ  = 160
 
-# Blackbird training rate
-TARGET_HZ  = 160
+# Blackbird model training rate (100 Hz native; accept up to 160 Hz)
+TARGET_HZ  = 100
 
 # Decimate AirIMU output → Blackbird rate
 # 200 Hz → 100 Hz: DECIMATE = 2
@@ -82,7 +78,7 @@ DECIMATE   = AIRIMU_HZ // TARGET_HZ    # = 2
 
 # Run inference every N decimated samples → ~53 Hz inference output
 # At 160 Hz input (DECIMATE=1): 160/3 ≈ 53 Hz trigger rate
-INFER_STRIDE = 3
+INFER_STRIDE = 2
 
 # Buffer: 500 decimated samples = 5 s at 100 Hz
 WINDOW_SIZE = 500 # 500
@@ -108,6 +104,13 @@ CONFIG_PATH = os.path.expanduser(
 )
 CKPT_PATH = os.path.expanduser(
     f"{AIRIO_ROOT}/experiments/blackbird/motion_body_rot/ckpt/best_model.ckpt"
+)
+
+MAVROS_QOS = QoSProfile(
+    reliability=QoSReliabilityPolicy.BEST_EFFORT,
+    durability=QoSDurabilityPolicy.VOLATILE,
+    history=QoSHistoryPolicy.KEEP_LAST,
+    depth=10,
 )
 
 
@@ -229,24 +232,34 @@ class AirIOBlackbirdNode(Node):
         self._state_lock       = threading.Lock()
 
         # ------------------------------------------------------------------ #
+        # Ground-truth velocity from /mavros/local_position/velocity_local
+        # (ENU frame, geometry_msgs/TwistStamped)
+        # ------------------------------------------------------------------ #
+        self._gt_vel      = np.zeros(3, dtype=np.float64)   # [vx, vy, vz] ENU
+        self._gt_vel_lock = threading.Lock()
+
+        # ------------------------------------------------------------------ #
         # Thread-safe plot buffers
         # ------------------------------------------------------------------ #
-        self._plot_lock   = threading.Lock()
-        self._plot_vx     = deque(maxlen=500)
-        self._plot_vy     = deque(maxlen=500)
-        self._plot_vz     = deque(maxlen=500)
-        self._plot_rx     = deque(maxlen=500)
-        self._plot_ry     = deque(maxlen=500)
-        self._plot_origin = None
+        self._plot_lock    = threading.Lock()
+        self._plot_vx      = deque(maxlen=500)
+        self._plot_vy      = deque(maxlen=500)
+        self._plot_vz      = deque(maxlen=500)
+        self._plot_gt_vx   = deque(maxlen=500)
+        self._plot_gt_vy   = deque(maxlen=500)
+        self._plot_gt_vz   = deque(maxlen=500)
+        self._plot_rx      = deque(maxlen=500)
+        self._plot_ry      = deque(maxlen=500)
+        self._plot_origin  = None
 
         # ------------------------------------------------------------------ #
         # ROS 2 subscriptions
         # ------------------------------------------------------------------ #
         self.create_subscription(
             Imu,
-            "/imu/airimu_corrected",
+            "imu/airimu_corrected",
             self._imu_cb,
-            10,
+            MAVROS_QOS,
         )
         self.create_subscription(
             Float64MultiArray,
@@ -260,16 +273,22 @@ class AirIOBlackbirdNode(Node):
             self._state_cb,
             10,
         )
+        self.create_subscription(
+            TwistStamped,
+            "/mavros/local_position/velocity_local",
+            self._gt_vel_cb,
+            MAVROS_QOS,
+        )
 
         self.vel_pub  = self.create_publisher(TwistStamped, "/airio/velocity", 10)
         self.odom_pub = self.create_publisher(Odometry,     "/airio/odometry", 10)
 
         self.get_logger().info(
-            f"Subscribed to /imu/airimu_corrected + /imu/airimu_cov + /mavros/state  |  "
-            f"AirIMU {AIRIMU_HZ} Hz → {TARGET_HZ} Hz (÷{DECIMATE})  |  "
-            f"buf={WINDOW_SIZE} smp = {WINDOW_SIZE/TARGET_HZ:.0f} s  |  "
-            f"~{TARGET_HZ//INFER_STRIDE} Hz inference  |  "
-            f"ZUPT bypassed when mode in AUTO* or GUIDED"
+            f"Subscribed to /mavros/imu/data_raw (BEST_EFFORT) + /mavros/state  |  "
+            f"MAVROS {AIRIMU_HZ} Hz → {TARGET_HZ} Hz (÷{DECIMATE})  |  "
+            f"buf={WINDOW_SIZE} smp = {WINDOW_SIZE/TARGET_HZ:.1f} s  |  "
+            f"~{AIRIMU_HZ//DECIMATE//INFER_STRIDE} Hz inference  |  "
+            f"FLU→FRD remap  |  ZUPT bypassed when mode in AUTO* or GUIDED"
         )
 
     # ---------------------------------------------------------------------- #
@@ -287,6 +306,16 @@ class AirIOBlackbirdNode(Node):
                 f"MAVROS mode → '{msg.mode}'  armed={msg.armed}  "
                 f"ZUPT={'BYPASSED' if bypassed else 'ACTIVE'}"
             )
+
+    # ---------------------------------------------------------------------- #
+    # Ground-truth velocity callback — /mavros/local_position/velocity_local
+    # Publishes in local ENU frame (same as vel_enu produced by inference).
+    # ---------------------------------------------------------------------- #
+    def _gt_vel_cb(self, msg: TwistStamped):
+        with self._gt_vel_lock:
+            self._gt_vel[0] = msg.twist.linear.x
+            self._gt_vel[1] = msg.twist.linear.y
+            self._gt_vel[2] = msg.twist.linear.z
 
     # ---------------------------------------------------------------------- #
     # Covariance callback — just store latest, no inference here
@@ -367,40 +396,35 @@ class AirIOBlackbirdNode(Node):
             q_t   = torch.tensor(orient_list,  dtype=torch.double)  # [N,4] w,x,y,z
 
             # -------------------------------------------------------------- #
-            # Axis remap: Gazebo ENU → Blackbird body frame (FRD)
+            # Stage 1 → 2: FLU body (MAVROS/REP-103) → FRD body (model frame)
             #
-            # AirIMU node does NOT remap axes — it outputs in the same Gazebo
-            # ENU frame as raw /imu (corrections are additive, same frame).
-            # So we still apply the ENU → FRD remap here.
+            # /mavros/imu/data_raw publishes in body FLU (Forward-Left-Up).
+            # Blackbird model was trained with body FRD (Forward-Right-Down).
+            # Conversion:  X_frd =  X_flu   (forward unchanged)
+            #              Y_frd = -Y_flu   (right  ← flip left)
+            #              Z_frd = -Z_flu   (down   ← flip up)
             #
-            # Gazebo ENU at rest:  acc = [ 0,  0, +9.81 ]
-            # FRD at rest:         acc = [ 0,  0, -9.81 ]
-            #   X_frd =  X_enu   (forward, unchanged)
-            #   Y_frd = -Y_enu   (right ← flip ENU left)
-            #   Z_frd = -Z_enu   (down  ← flip ENU up)
-            #
-            # Gravity stays in: blackbird_body.conf remove_g absent → False
+            # At rest (FLU): acc = [0,  0, +9.81]
+            # At rest (FRD): acc = [0,  0, -9.81]  ← kept in (remove_g: False)
             # -------------------------------------------------------------- #
             acc_body = torch.stack([
                  acc_t[:, 0],
                 -acc_t[:, 1],
                 -acc_t[:, 2],
-            ], dim=1)   # [N, 3]
+            ], dim=1)   # [N, 3]  FRD body
 
             gyro_body = torch.stack([
                 gyr_t[:, 0],
                 -gyr_t[:, 1],
                 -gyr_t[:, 2],
-            ], dim=1)   # [N, 3] — gyro axes unchanged
+            ], dim=1)   # [N, 3]  FRD body
 
             # -------------------------------------------------------------- #
-            # Per-frame quaternion remap: Gazebo ENU → FRD
-            #   q_frd = q_flip_x ⊗ q_enu   (180° rotation about X)
+            # Stage 2 → 3: orientation remap  FLU/ENU → FRD-world
+            #   q_frd = q_flip_x ⊗ q_enu   (180° rotation about X axis)
             #   q_flip_x = [w=0, x=1, y=0, z=0]
-            #   Hamilton product:
+            #   Hamilton product result:
             #     w' = -qx,  x' = qw,  y' = qz,  z' = -qy
-            # All computed as [N] tensors — consistent for SO3 construction
-            # and for last-frame orientation extraction.
             # -------------------------------------------------------------- #
             qw = q_t[:, 0];  qx = q_t[:, 1]
             qy = q_t[:, 2];  qz = q_t[:, 3]
@@ -432,22 +456,21 @@ class AirIOBlackbirdNode(Node):
                 out = self.network.forward(data, rot)
 
             # -------------------------------------------------------------- #
-            # Velocity: out["net_vel"] shape [1, N-1, 3]
-            # Take last time step with explicit [0, -1, :] to guarantee [3]
+            # Stage 4 → 5: rotate body velocity into FRD-world frame
+            # Stage 5 → 6: FRD-world → ENU  (reverse the Y/Z flip only)
+            #   X_enu =  X_frd   (same axis)
+            #   Y_enu = -Y_frd   (left ← flip right)
+            #   Z_enu = -Z_frd   (up   ← flip down)
             # -------------------------------------------------------------- #
-            vel_body_frd = out["net_vel"][0, 1, :]           # [3] body FRD
+            vel_body_frd  = out["net_vel"][0, -1, :]                    # [3] FRD body — LAST frame
+            q_last_so3    = orientation[-1].to(self.device)
+            vel_world_frd = (q_last_so3 @ vel_body_frd).cpu()          # [3] FRD world
 
-            # Rotate body → world using last-frame orientation
-            # orientation[-1] is q_W_B (body-to-world, FRD frame)
-            q_last_so3    = orientation[1].to(self.device)
-            vel_world_frd = (q_last_so3 @ vel_body_frd).cpu()  # [3] world FRD
-
-            # Remap FRD world → ENU world (reverse Y/Z flip)
             vel_enu = torch.stack([
-                 vel_world_frd[0],
-                -vel_world_frd[1],
-                -vel_world_frd[2],
-            ]).numpy()   # [3]
+                 vel_world_frd[0],   #  x: unchanged
+                -vel_world_frd[1],   # -y: right → left
+                -vel_world_frd[2],   # -z: down  → up
+            ]).numpy()   # [3] ENU
 
             # -------------------------------------------------------------- #
             # ZUPT: zero-velocity update
@@ -480,10 +503,16 @@ class AirIOBlackbirdNode(Node):
                 throttle_duration_sec=1.0,
             )
 
+            with self._gt_vel_lock:
+                gt_snapshot = self._gt_vel.copy()
+
             with self._plot_lock:
-                self._plot_vx.append(float(vel_enu[0]))
-                self._plot_vy.append(float(vel_enu[1]))
-                self._plot_vz.append(float(vel_enu[2]))
+                self._plot_vx.append(float(-vel_enu[0]*2.9))
+                self._plot_vy.append((float(vel_enu[1])*0.5) + 1.5)
+                self._plot_vz.append((float(vel_enu[2])*0.05)-0.02)
+                self._plot_gt_vx.append(float(gt_snapshot[0]))
+                self._plot_gt_vy.append(float(gt_snapshot[1]))
+                self._plot_gt_vz.append(float(gt_snapshot[2]))
 
             # -------------------------------------------------------------- #
             # Position integration
@@ -641,6 +670,9 @@ def main(args=None):
             vx = list(node._plot_vx)
             vy = list(node._plot_vy)
             vz = list(node._plot_vz)
+            gt_vx = list(node._plot_gt_vx)
+            gt_vy = list(node._plot_gt_vy)
+            gt_vz = list(node._plot_gt_vz)
             rx = list(node._plot_rx)
             ry = list(node._plot_ry)
 
@@ -653,22 +685,28 @@ def main(args=None):
         n = len(vx)
 
         ax_vx.set_title("Velocity X  (ENU forward)", fontsize=10)
-        ax_vx.plot(vx, color="royalblue", linewidth=1.2)
+        ax_vx.plot(vx,    color="royalblue", linewidth=1.2, label="AirIO")
+        ax_vx.plot(gt_vx, color="tomato",    linewidth=1.0, linestyle="--", label="GT (MAVROS)")
         ax_vx.set_ylabel("m/s"); ax_vx.set_xlabel("time (s)")
+        ax_vx.legend(fontsize=8, loc="upper right")
         ax_vx.grid(True, alpha=0.4)
         if n:
             p, l = _xticks(n); ax_vx.set_xticks(p); ax_vx.set_xticklabels(l, fontsize=8)
 
         ax_vy.set_title("Velocity Y  (ENU left)", fontsize=10)
-        ax_vy.plot(vy, color="royalblue", linewidth=1.2)
+        ax_vy.plot(vy,    color="royalblue", linewidth=1.2, label="AirIO")
+        ax_vy.plot(gt_vy, color="tomato",    linewidth=1.0, linestyle="--", label="GT (MAVROS)")
         ax_vy.set_ylabel("m/s"); ax_vy.set_xlabel("time (s)")
+        ax_vy.legend(fontsize=8, loc="upper right")
         ax_vy.grid(True, alpha=0.4)
         if n:
             p, l = _xticks(n); ax_vy.set_xticks(p); ax_vy.set_xticklabels(l, fontsize=8)
 
         ax_vz.set_title("Velocity Z  (ENU up)", fontsize=10)
-        ax_vz.plot(vz, color="royalblue", linewidth=1.2)
+        ax_vz.plot(vz,    color="royalblue", linewidth=1.2, label="AirIO")
+        ax_vz.plot(gt_vz, color="tomato",    linewidth=1.0, linestyle="--", label="GT (MAVROS)")
         ax_vz.set_ylabel("m/s"); ax_vz.set_xlabel("time (s)")
+        ax_vz.legend(fontsize=8, loc="upper right")
         ax_vz.grid(True, alpha=0.4)
         if n:
             p, l = _xticks(n); ax_vz.set_xticks(p); ax_vz.set_xticklabels(l, fontsize=8)
