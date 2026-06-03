@@ -124,6 +124,25 @@ RUN cd ~/ardupilot/Tools/autotest \
     && sudo apt-get install -y python3-wxgtk4.0 \
     && sudo pip3 install MAVProxy --upgrade --break-system-packages
 
+# ── lawin_mavros dependencies ─────────────────────────────
+RUN sudo apt-get update && sudo apt-get install -y \
+    ros-jazzy-mavros \
+    ros-jazzy-mavros-msgs \
+    ros-jazzy-mavros-extras \
+    ros-jazzy-cv-bridge \
+    ros-jazzy-image-transport \
+    ros-jazzy-vision-msgs \
+    ros-jazzy-image-view \
+    python3-pip \
+  && sudo /opt/ros/jazzy/lib/mavros/install_geographiclib_datasets.sh \
+  && sudo rm -rf /var/lib/apt/lists/*
+
+RUN pip3 install \
+    MAVProxy pymavlink future \
+    ultralytics \
+    "numpy<2" \
+    --break-system-packages
+
 # ROS2 with SITL
 RUN /bin/bash -c "source /opt/ros/jazzy/setup.bash \
     && cd ~/ros2_ws \
@@ -163,6 +182,15 @@ RUN /bin/bash -c "source /opt/ros/jazzy/setup.bash \
 
 # Copy local src folder to ros2_ws
 COPY ./src/ /home/ros/ros2_ws/src/
+
+# Build local packages
+RUN /bin/bash -c "source /opt/ros/jazzy/setup.bash \
+    && source ~/ros2_ws/install/setup.bash \
+    && cd ~/ros2_ws \
+    && rosdep install --from-paths src/lawin_mavros --ignore-src -r -y \
+    && MAKEFLAGS='-j1' colcon build \
+        --packages-select lawin_mavros \
+        --parallel-workers 1 --executor sequential"
 
 ####################################################################################################
 
