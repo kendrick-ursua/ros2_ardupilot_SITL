@@ -32,6 +32,8 @@ setup(
             'oak1_tracker      = lawin_mavros.oak1_tracker_node:main',
             'hover_test        = lawin_mavros.hover_test:main',
             'orig_hover_test = lawin_mavros.orig_hover_test:main',
+            'mock_detection = lawin_mavros.mock_detection:main',
+            'test_gazebo = lawin_mavros.test_gazebo:main',
         ],
     },
 )
